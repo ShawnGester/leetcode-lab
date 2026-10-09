@@ -3,7 +3,7 @@
 import type { TestCase } from "@/lib/problems";
 import type { CaseResult } from "@/lib/java/types";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, Trash2, XCircle } from "lucide-react";
 import { JsonField } from "./JsonField";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
   results: CaseResult[] | null;
   running: boolean;
   compileError?: string | null;
+  runError?: string | null;
   onRun: () => void;
   onResetTests: () => void;
 };
@@ -26,6 +27,7 @@ export function TestPanel({
   results,
   running,
   compileError,
+  runError,
   onRun,
   onResetTests,
 }: Props) {
@@ -51,11 +53,40 @@ export function TestPanel({
   };
 
   const resultById = new Map(results?.map((r) => [r.id, r]) ?? []);
+  const passedCount = results?.filter((r) => r.passed).length ?? 0;
+  const allPassed = results != null && results.length > 0 && passedCount === results.length;
 
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-bg-panel/80">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold text-text">Test cases</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text">Test cases</h3>
+          {running ? (
+            <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Compiling &amp; running…
+            </span>
+          ) : results ? (
+            <span
+              role="status"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+                allPassed ? "bg-pass/15 text-pass" : "bg-danger/15 text-danger",
+              )}
+            >
+              {allPassed ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              ) : (
+                <XCircle className="h-3.5 w-3.5" />
+              )}
+              {passedCount}/{results.length} passed
+            </span>
+          ) : compileError ? (
+            <span className="rounded-full bg-danger/15 px-2 py-0.5 text-xs font-semibold text-danger">
+              Compile error
+            </span>
+          ) : null}
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -88,15 +119,32 @@ export function TestPanel({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        {runError ? (
+          <div
+            role="alert"
+            className="animate-fade-up rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+          >
+            {runError}
+          </div>
+        ) : null}
+
         {compileError ? (
-          <div className="animate-fade-up rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger whitespace-pre-wrap font-mono">
-            {compileError}
+          <div role="alert" className="animate-fade-up rounded-lg border border-danger/40 bg-danger/10 px-3 py-2">
+            <p className="mb-1 text-xs font-semibold text-danger">javac reported errors</p>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-danger/90">
+              {compileError}
+            </pre>
           </div>
         ) : null}
 
         {tests.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            No tests yet. Add a case or reset samples.
+          <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-muted">
+            No test cases. Click <span className="text-accent">Add</span> or{" "}
+            <span className="text-text">Reset samples</span> to get some back.
+          </div>
+        ) : !results && !compileError && !runError && !running ? (
+          <p className="text-xs text-text-muted">
+            Edit the JSON inputs below, then click Run Java to compile Solution.java and check each case.
           </p>
         ) : null}
 
