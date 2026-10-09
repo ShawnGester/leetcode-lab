@@ -23,7 +23,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === null || b === null) return a === b;
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
-    // For coordinate lists (e.g. Pacific Atlantic), order may vary
     if (
       a.every((x) => Array.isArray(x) && x.length === 2 && typeof x[0] === "number") &&
       b.every((x) => Array.isArray(x) && x.length === 2 && typeof x[0] === "number")
@@ -39,7 +38,14 @@ function deepEqual(a: unknown, b: unknown): boolean {
     const ak = Object.keys(a as object).sort();
     const bk = Object.keys(b as object).sort();
     if (ak.length !== bk.length) return false;
-    return ak.every((k, i) => k === bk[i] && deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+    return ak.every(
+      (k, i) =>
+        k === bk[i] &&
+        deepEqual(
+          (a as Record<string, unknown>)[k],
+          (b as Record<string, unknown>)[k]
+        )
+    );
   }
   return false;
 }
@@ -48,10 +54,32 @@ function cloneArgs(args: unknown[]): unknown[] {
   return structuredClone(args);
 }
 
-/**
- * Execute user code in a Web Worker with a timeout.
- * Falls back to Function constructor if Workers are unavailable.
- */
+function buildExecutorSource(): string {
+  return `
+self.onmessage = function (e) {
+  var code = e.data.code;
+  var functionName = e.data.functionName;
+  var args = e.data.args;
+  try {
+    var factory = new Function(
+      code +
+        ";\\nif (typeof " + functionName + " !== 'function') {" +
+        " throw new Error('Expected function ' + functionName + ' to be defined.');" +
+        "}\\nreturn " + functionName + ";"
+    );
+    var fn = factory();
+    var result = fn.apply(null, args);
+    self.postMessage({ ok: true, result: result });
+  } catch (err) {
+    self.postMessage({
+      ok: false,
+      error: err && err.message ? String(err.message) : String(err),
+    });
+  }
+};
+`;
+}
+
 async function executeInSandbox(
   code: string,
   functionName: string,
@@ -62,27 +90,9 @@ async function executeInSandbox(
     return executeWithFunction(code, functionName, args);
   }
 
-  const workerSource = `
-    self.onmessage = function (e) {
-      const { code, functionName, args } = e.data;
-      try {
-        const fn = new Function(
-          code + "\\n; if (typeof " + functionName + " !== 'function') {" +
-          " throw new Error('Expected function \\'" + functionName + "\\' to be defined.'); }" +
-          "\\nreturn " + functionName + ";"
-        )();
-        const result = fn.apply(null, args);
-        self.postMessage({ ok: true, result });
-      } catch (err) {
-        self.postMessage({
-          ok: false,
-          error: err && err.message ? String(err.message) : String(err),
-        });
-      }
-    };
-  `;
-
-  const blob = new Blob([workerSource], { type: "application/javascript" });
+  const blob = new Blob([buildExecutorSource()], {
+    type: "application/javascript",
+  });
   const url = URL.createObjectURL(blob);
 
   return new Promise((resolve, reject) => {
@@ -97,7 +107,9 @@ async function executeInSandbox(
       reject(new Error(`Timed out after ${timeoutMs}ms (possible infinite loop)`));
     }, timeoutMs);
 
-    worker.onmessage = (e: MessageEvent<{ ok: boolean; result?: unknown; error?: string }>) => {
+    worker.onmessage = (
+      e: MessageEvent<{ ok: boolean; result?: unknown; error?: string }>
+    ) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -120,14 +132,19 @@ async function executeInSandbox(
   });
 }
 
-function executeWithFunction(code: string, functionName: string, args: unknown[]): unknown {
-  const fn = new Function(
+function executeWithFunction(
+  code: string,
+  functionName: string,
+  args: unknown[]
+): unknown {
+  const factory = new Function(
     `${code}
 ; if (typeof ${functionName} !== 'function') {
   throw new Error("Expected function '${functionName}' to be defined.");
 }
 return ${functionName};`
-  )();
+  );
+  const fn = factory() as (...a: unknown[]) => unknown;
   return fn(...args);
 }
 

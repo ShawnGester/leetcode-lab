@@ -1,7 +1,7 @@
 "use client";
 
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 interface CodeEditorProps {
   value: string;
@@ -16,6 +16,9 @@ export function CodeEditor({
   readOnly = false,
   height = "100%",
 }: CodeEditorProps) {
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   const handleMount: OnMount = useCallback((editor) => {
     editor.updateOptions({
       fontSize: 14,
@@ -26,6 +29,10 @@ export function CodeEditor({
       renderLineHighlight: "gutter",
       tabSize: 2,
       automaticLayout: true,
+    });
+    // Keep React state in sync even when value is set programmatically
+    editor.onDidChangeModelContent(() => {
+      onChangeRef.current(editor.getValue());
     });
   }, []);
 
