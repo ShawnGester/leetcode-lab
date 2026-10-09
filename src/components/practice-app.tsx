@@ -127,7 +127,9 @@ export function PracticeApp() {
                 }}
               >
                 <SelectTrigger className="w-full sm:max-w-md" size="default">
-                  <SelectValue placeholder="Select a problem" />
+                  <SelectValue placeholder="Select a problem">
+                    {problem ? `${problem.number}. ${problem.title}` : "Select a problem"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {problems.map((p) => (
