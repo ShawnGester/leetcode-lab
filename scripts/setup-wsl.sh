@@ -3,7 +3,9 @@
 # Safe to re-run: every step checks what is already installed first.
 #
 # Usage:
-#   bash scripts/setup-wsl.sh [--maven] [--gradle] [--node-version 22]
+#   bash scripts/setup-wsl.sh [--maven] [--gradle] [--node-version 22] [--allow-windows-path]
+#
+# Refuses to run from a Windows drive (/mnt/c/...): clone the project into your Ubuntu home.
 #
 # Optional environment variables:
 #   GIT_NAME="Your Name" GIT_EMAIL="you@example.com"  set global git identity if not already set
@@ -14,13 +16,15 @@ NODE_VERSION="22"
 NVM_VERSION="v0.40.3"
 WITH_MAVEN=0
 WITH_GRADLE=0
+ALLOW_WINDOWS_PATH=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --allow-windows-path) ALLOW_WINDOWS_PATH=1 ;;
     --maven) WITH_MAVEN=1 ;;
     --gradle) WITH_GRADLE=1 ;;
     --node-version) NODE_VERSION="${2:?--node-version needs a value}"; shift ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
   shift
@@ -30,16 +34,29 @@ bold() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 
+case "$(uname -s)" in
+  Linux) ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "ERROR: This is a Windows shell ($(uname -s), e.g. Git Bash), not WSL." >&2
+    echo "Open Ubuntu (Start menu > Ubuntu, or run 'wsl' in PowerShell) and run the script there." >&2
+    exit 1 ;;
+  *)
+    echo "ERROR: Unsupported OS '$(uname -s)'. This script is for Ubuntu on WSL (or Ubuntu Linux)." >&2
+    exit 1 ;;
+esac
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
 if [[ $EUID -eq 0 ]]; then
   echo "Run this as your normal WSL user (it uses sudo when needed), not as root." >&2
   exit 1
 fi
 
 bold "Checking platform"
-if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-  ok "Running inside WSL"
+if [[ -n "${WSL_DISTRO_NAME:-}" ]] || grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+  ok "Running inside WSL (${WSL_DISTRO_NAME:-distro name unknown})"
 else
-  warn "This does not look like WSL; continuing anyway (works on regular Ubuntu too)"
+  warn "This is Linux but not WSL. Continuing, since the script also works on regular Ubuntu."
 fi
 if [[ -r /etc/os-release ]]; then
   # shellcheck disable=SC1091
@@ -47,8 +64,32 @@ if [[ -r /etc/os-release ]]; then
   ok "Distro: ${PRETTY_NAME:-unknown}"
   [[ "${ID:-}" == "ubuntu" ]] || warn "Expected Ubuntu; apt package names may differ"
 fi
-if [[ "$PWD" == /mnt/* ]]; then
-  warn "You are under $PWD (the Windows filesystem). Keep projects in your Linux home (~/code) for much faster npm and file watching."
+
+windows_path=""
+for p in "$(pwd -P)" "$SCRIPT_DIR"; do
+  [[ "$p" == /mnt/* ]] && { windows_path="$p"; break; }
+done
+if [[ -n "$windows_path" ]]; then
+  if [[ $ALLOW_WINDOWS_PATH -eq 1 ]]; then
+    warn "Running from $windows_path on a Windows drive because --allow-windows-path was given."
+  else
+    cat >&2 <<EOF
+
+ERROR: $windows_path is on a Windows drive (/mnt/... is how WSL shows C:, D:, ...).
+LeetLab must live inside WSL Ubuntu, not on Windows: npm installs, file watching,
+and javac are much slower or flaky on /mnt/*, and Windows tools can rewrite line endings.
+
+Clone it into your Ubuntu home folder instead, from a WSL terminal:
+
+    mkdir -p ~/repositories/dev && cd ~/repositories/dev
+    origin repo clone shawn-ge/leetcode-lab
+    cd leetcode-lab && pwd          # should print /home/<you>/repositories/dev/leetcode-lab
+    bash scripts/setup-wsl.sh
+
+To run from a Windows drive anyway (not recommended), pass --allow-windows-path.
+EOF
+    exit 1
+  fi
 fi
 
 apt_missing=()
@@ -157,12 +198,15 @@ cat <<'EOF'
 
 All set. Next steps:
   1. Open a new terminal (or run: source ~/.bashrc) so JAVA_HOME and nvm are on PATH.
-  2. Get the project into your Linux home, e.g.:
-       mkdir -p ~/code && cd ~/code
-       git clone <your-repo-url> leetlab && cd leetlab
+  2. If you haven't yet, clone the project into your Ubuntu home (not /mnt/c):
+       curl -fsSL https://downloads.cursor.com/origin/install.sh | sh
+       origin auth login
+       mkdir -p ~/repositories/dev && cd ~/repositories/dev
+       origin repo clone shawn-ge/leetcode-lab && cd leetcode-lab
+       git checkout cursor/leetcode-practice-3908
   3. Install dependencies once while online (afterwards the app runs fully offline):
        npm install
   4. Start the app and open http://127.0.0.1:4317 in your Windows browser:
        npm run dev
-  5. Optional: run `code .` or `cursor .` from the project folder to open it in VS Code / Cursor over WSL.
+  5. Open the folder in VS Code / Cursor over WSL: run `code .` or `cursor .` from the project folder.
 EOF
