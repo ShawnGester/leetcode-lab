@@ -1,40 +1,31 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
 
-type Props = {
+export type CodeEditorProps = {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
 };
 
-export function CodeEditor({ value, onChange, readOnly }: Props) {
+export function EditorLoading() {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-text-muted animate-pulse-soft">
+      Loading Java editor…
+    </div>
+  );
+}
+
+// Monaco touches `window` at import time, so it must only load in the browser.
+const MonacoEditor = dynamic(() => import("./MonacoEditor"), {
+  ssr: false,
+  loading: EditorLoading,
+});
+
+export function CodeEditor(props: CodeEditorProps) {
   return (
     <div className="h-full min-h-[280px] overflow-hidden rounded-lg border border-border bg-editor">
-      <Editor
-        height="100%"
-        defaultLanguage="java"
-        theme="vs-dark"
-        value={value}
-        onChange={(v) => onChange(v ?? "")}
-        options={{
-          readOnly,
-          minimap: { enabled: false },
-          fontSize: 14,
-          fontFamily: "var(--font-code), Menlo, monospace",
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          tabSize: 4,
-          padding: { top: 12, bottom: 12 },
-          wordWrap: "on",
-          renderLineHighlight: "gutter",
-        }}
-        loading={
-          <div className="flex h-full items-center justify-center text-sm text-text-muted animate-pulse-soft">
-            Loading Java editor…
-          </div>
-        }
-      />
+      <MonacoEditor {...props} />
     </div>
   );
 }
