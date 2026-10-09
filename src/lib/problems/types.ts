@@ -1,34 +1,24 @@
-export type Difficulty = "Easy" | "Medium" | "Hard";
-
-export type ViewTab = "practice" | "optimal" | "brute";
-
-export interface TestCase {
+export type TestCase = {
   id: string;
   label: string;
-  /** JSON array of arguments matching the function signature */
-  argsJson: string;
-  /** JSON value for the expected return */
-  expectedJson: string;
-}
+  args: unknown[];
+  expected: unknown;
+};
 
-export interface SolutionInfo {
-  code: string;
-  time: string;
-  space: string;
-  notes: string;
-}
-
-export interface Problem {
+export type Problem = {
   id: string;
   number: number;
   title: string;
-  difficulty: Difficulty;
+  difficulty: "Easy" | "Medium" | "Hard";
   description: string;
-  examples: string[];
+  examples: { input: string; output: string; explanation?: string }[];
   constraints: string[];
-  functionName: string;
+  methodName: string;
+  paramTypes: string[];
+  returnType: string;
   starterCode: string;
+  optimalSolution: string;
+  bruteForceSolution: string;
+  complexity: { optimal: string; bruteForce: string };
   sampleTests: TestCase[];
-  optimal: SolutionInfo;
-  bruteForce: SolutionInfo;
-}
+};
