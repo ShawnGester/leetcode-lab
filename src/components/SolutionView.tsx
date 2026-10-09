@@ -1,6 +1,7 @@
 "use client";
 
 import { CodeEditor } from "./CodeEditor";
+import { NotesBox } from "./NotesBox";
 import type { Problem } from "@/lib/problems";
 
 type Props = {
@@ -12,9 +13,10 @@ export function SolutionView({ problem, mode }: Props) {
   const code = mode === "optimal" ? problem.optimalSolution : problem.bruteForceSolution;
   const note =
     mode === "optimal" ? problem.complexity.optimal : problem.complexity.bruteForce;
+  const editorHeight = Math.min(Math.max(code.split("\n").length * 21 + 32, 220), 520);
 
   return (
-    <div className="animate-fade-up flex h-full min-h-0 flex-col gap-3">
+    <div className="animate-fade-up flex h-full min-h-0 flex-col gap-3 overflow-y-auto pr-1">
       <div className="rounded-xl border border-border bg-bg-panel/80 px-4 py-3">
         <p className="text-sm font-semibold text-text">
           {mode === "optimal" ? "Optimal solution" : "Brute force solution"}
@@ -24,8 +26,11 @@ export function SolutionView({ problem, mode }: Props) {
           Read-only Java reference — switch back to Practice to edit and run your own code.
         </p>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="shrink-0" style={{ height: editorHeight }}>
         <CodeEditor value={code} onChange={() => {}} readOnly />
+      </div>
+      <div className="shrink-0">
+        <NotesBox problemId={problem.id} />
       </div>
     </div>
   );
